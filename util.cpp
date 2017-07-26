@@ -27,7 +27,14 @@ void UtilAPB::MyDebug(const QString msg)
 #endif
 }
 
-int UtilAPB::ConnectTcpServer(char *ipServer, int port)
+void UtilAPB::MyDebug(const QSqlError &msg)
+{
+#ifdef MY_DEBUG
+    qDebug()<<msg;
+#endif
+}
+
+int UtilAPB::ConnectTcpServer(const char *ipServer, const int port)
 {
     struct sockaddr_in serverAddr;
     int nRet = 0;

@@ -3,7 +3,7 @@
 
 #ifndef NMEA0183DEC_H
 #define NMEA0183DEC_H
-
+#include "def_cor_sat.h"
 #include <QString>
 
 class Nmea0183Dec

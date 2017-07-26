@@ -6,8 +6,7 @@
 
 #include "def_convrnx.h"
 #include "def_DataQC.h"
-#include "OracleWrapper/corsdbmanager.h"
-
+#include "def_cor_sat.h"
 class Rtcm3Dec
 {
 public:

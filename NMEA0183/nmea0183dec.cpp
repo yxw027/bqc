@@ -1,7 +1,7 @@
 #include "nmea0183dec.h"
 #include <QStringList>
 #include <util.h>
-#include <OracleWrapper/corsdbmanager.h>
+
 Nmea0183Dec::Nmea0183Dec()
 {
     m_strNMEA.clear();

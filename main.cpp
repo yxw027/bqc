@@ -1,43 +1,28 @@
-#include <QCoreApplication>
-#include <QDateTime>
-#include <QTextCodec>
-
-#include <RTCM2RNX/def_convrnx.h>
-#include <RTCM2RNX/rtcm3dec.h>
-#include <NMEA0183/nmea0183dec.h>
-#include "OracleWrapper/corsdbmanager.h"
-
 #include "util.h"
-#include <unistd.h>
-#include <arpa/inet.h>
 #include <semaphore.h>
 #include<stdio.h>
 #include<stdlib.h>
 
-const int BUFF_SIZE=4096;
-const char serverIP[20]="172.17.223.105";
-const int nmeaPort=2112;
-const int rtcmPort=2111;
+#include "SQLWrapper/corsdbmanager.h"
+#include <RTCM2RNX/rtcm3dec.h>
+#include <NMEA0183/nmea0183dec.h>
 
 CorsDBManager g_corsDbManager;      // Cors数据库管理类
 Nmea0183Dec g_nmea0183Dec;           // Nmea0183解码器
 Rtcm3Dec g_rtcm3Dec;                           // Rtcm3解码器
 
+const int BUFF_SIZE=4096;
 sem_t g_sem_rtcm;                                   // rtcm数据资源的信号量
 sem_t g_sem_nmea;                                 // nmea数据资源的信号量
 sem_t g_sem_sync;                                   // 同步资源的信号量
 
-char szBuffNmea0183[BUFF_SIZE];       // Nmea0183数据缓冲区
-char szBuffRtcm3[BUFF_SIZE];               // Rtcm3数据缓冲器
-
-int nFdNmea0183 = 0;                            // 接收Nmea0183数据的socket句柄
-int nFdRtcm3 = 0;                                    // 接收Rtcm3数据的socket句柄
-
 // Nmea0183数据接收、解码线程
+int nFdNmea0183=0;
 void* thread_nmea0183(void* )
 {
+    char szBuffNmea0183[BUFF_SIZE];       // Nmea0183数据缓冲区
     memset(szBuffNmea0183,0,BUFF_SIZE);
-    while(TRUE)
+    while(true)
     {
         if(!nFdNmea0183) break;
         int nReadLen=read(nFdNmea0183,szBuffNmea0183,BUFF_SIZE) ;
@@ -58,10 +43,12 @@ void* thread_nmea0183(void* )
 }
 
 // Rtcm3数据接收、解码线程
+int nFdRtcm3=0;
 void* thread_rtcm3(void* )
 {
+    char szBuffRtcm3[BUFF_SIZE];               // Rtcm3数据缓冲器
     memset(szBuffRtcm3,0,BUFF_SIZE);
-    while(TRUE)
+    while(true)
     {
         if(!nFdRtcm3) break;
         int nReadLen=read(nFdRtcm3,szBuffRtcm3,BUFF_SIZE);
@@ -81,9 +68,11 @@ void* thread_rtcm3(void* )
 }
 
 // Rtcm3和Nmea0183数据同步线程
+queue<COR_SAT_ALL> g_nmea_cache_cor_dat;    //  同步前nmea的卫星数据的缓存队列
+queue<COR_SAT_ALL> g_rtcm_cache_cor_dat;     //  同步前rtcm的卫星数据的缓存队列
 void* thread_sync(void* )
 {
-    while(TRUE)
+    while(true)
     {
         sem_wait(&g_sem_nmea);      // 消费Nmea3数据
         sem_wait(&g_sem_rtcm);        // 消费Rtcm3数据
@@ -159,10 +148,10 @@ void* thread_sync(void* )
     }
 }
 
-//
+queue<COR_SAT_ALL> g_sync_cache_cal_rec;     //  同步后的解算数据的缓存队列
 void* thread_db(void*)
 {
-    while(TRUE)
+    while(true)
     {
         sem_wait(&g_sem_sync);// 消费同步后的数据
         // 从同步后的队列中取数据写入数据库
@@ -180,31 +169,27 @@ void* thread_db(void*)
 // 一个线程负责同步数据
 // 一个线程负责将同步后的数据写入或发送到数据库服务器
 
-int main(int , char *argv[])
+int main(int , char *[])
 {
-    QTextCodec::setCodecForLocale(QTextCodec::codecForName("UTF-8"));
-    pthread_mutex_init(&mutex_lock,NULL);
-
-    // 连接Rtcm3数据源、Nmea数据源
+    const char serverIP[20]="172.17.223.105";
+    const int nmeaPort=2112;
+    const int rtcmPort=2111;
+    // 连接Nmea数据源
     if((nFdNmea0183 = UtilAPB::ConnectTcpServer(serverIP, nmeaPort))<=0)
     {
         g_corsDbManager.UnInit();
         return -1;
     }
 
+     // 连接Rtcm3数据源
     if((nFdRtcm3 = UtilAPB::ConnectTcpServer(serverIP, rtcmPort))<=0)
     {
         g_corsDbManager.UnInit();
         return -1;
     }
 
-    // 通过参数初始化数据库管理类
-    QString ip = argv[1];
-    QString sid = argv[2];
-    QString user = argv[3];
-    QString password = argv[4];
-    UtilAPB::MyDebug(QString("ServerIP:%1 SID:%2 User:%3 Password:%4").arg(ip,sid,user,password));
-    if(!g_corsDbManager.Init(ip,sid,user,password))
+    // 连接数据库
+    if(!g_corsDbManager.Init())
     {
         g_corsDbManager.UnInit();
         return -1;
@@ -215,10 +200,10 @@ int main(int , char *argv[])
     sem_init(&g_sem_rtcm,0,0);
     sem_init(&g_sem_sync,0,0);
 
-    pthread_t threadNmea0183 = NULL;
-    pthread_t threadRtcm3 = NULL;
-    pthread_t threadSync = NULL;
-    pthread_t threadDb = NULL;
+    pthread_t threadNmea0183 = 0;
+    pthread_t threadRtcm3 = 0;
+    pthread_t threadSync = 0;
+    pthread_t threadDb = 0;
 
     // 开启Nmea0183数据接收处理线程、
     //Rtcm3数据接收处理线程、数据同步线程和数据写入或发送线程

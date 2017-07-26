@@ -1,5 +1,4 @@
 #include "oci_wrapper.h"
-#include "ocilib.h"
 #include "util.h"
 
 OCI_Wrapper* OCI_Wrapper::instance = nullptr;

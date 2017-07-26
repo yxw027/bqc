@@ -5,29 +5,11 @@
 project(APB)
 cmake_minimum_required(VERSION 2.8.8)
 
-if(WIN32)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fexec-charset=GBK -fpermissive")
-else()
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fexec-charset=UTF-8 -fpermissive")
-endif()
-option(BUILD_SHARED_LIBS "build shared libs" ON)
-
-if(${CMAKE_BUILD_TYPE} STREQUAL "Debug" )
-    set(DIR_LINK "${PROJECT_BINARY_DIR}/binD")
-else()
-    set(DIR_LINK "${PROJECT_BINARY_DIR}/bin")
-endif()
-set(LIBRARY_OUTPUT_PATH ${DIR_LINK})
-set(EXECUTABLE_OUTPUT_PATH ${DIR_LINK})
-
-message(STATUS "CMAKE_BUILD_TYPE:${CMAKE_BUILD_TYPE}")
-message(STATUS "CMAKE_TOOLCHAIN_FILE:${CMAKE_TOOLCHAIN_FILE}")
-message(STATUS "BUILD_SHARED_LIBS:${BUILD_SHARED_LIBS}")
-
-set(DIR_ORACLE /usr/local/oracle)
-link_directories(${DIR_ORACLE}/lib)
-link_directories(${DIR_LINK})
-
+#if(NOT DEFINED ENV{ORACLE_HOME})
+    # 没有找到ORACLE_HOMEE环境变量
+#    message(FATAL_ERROR "not defined environment variable:ORACLE_HOME")
+#endif()
+#link_directories($ENV{ORACLE_HOME}/lib)
 
 find_package(Qt5Core)
 find_package(Qt5Network)
@@ -42,15 +24,35 @@ include_directories(
     ${Qt5Core_INCLUDE_DIRS}
     ${Qt5SerialPort_INCLUDE_DIRS}
     ${Qt5Sql_INCLUDE_DIRS}
-    ${DIR_ORACLE}/include
     ${PROJECT_SOURCE_DIR}
     ${PROJECT_SOURCE_DIR}/RTCM2RNX
 )
 
+if(WIN32)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fexec-charset=GBK -fpermissive")
+else()
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fexec-charset=UTF-8 -fpermissive")
+endif()
+option(BUILD_SHARED_LIBS "build shared libs" ON)
+
+if(${CMAKE_BUILD_TYPE} STREQUAL "Debug" )
+    set(DIR_LINK "${PROJECT_BINARY_DIR}/binD")
+else()
+    set(DIR_LINK "${PROJECT_BINARY_DIR}/bin")
+endif()
+set(LIBRARY_OUTPUT_PATH ${DIR_LINK})
+set(EXECUTABLE_OUTPUT_PATH ${DIR_LINK})
+link_directories(${DIR_LINK})
+
+message(STATUS "CMAKE_BUILD_TYPE:${CMAKE_BUILD_TYPE}")
+message(STATUS "CMAKE_TOOLCHAIN_FILE:${CMAKE_TOOLCHAIN_FILE}")
+message(STATUS "BUILD_SHARED_LIBS:${BUILD_SHARED_LIBS}")
+
 set(SRC_LIST
     main.cpp
-    OracleWrapper/oci_wrapper.cpp
-    OracleWrapper/corsdbmanager.cpp
+    SQLWrapper/oci_wrapper.cpp
+    SQLWrapper/corsdbmanager.cpp
+    SQLWrapper/sql_wrapper.cpp
     RTCM2RNX/func_Cmn_Rtcm.cpp
     RTCM2RNX/func_Convrnx.cpp
     RTCM2RNX/func_RinexOut.cpp
@@ -84,9 +86,7 @@ set(FILE_DLL
         Qt5::Network
         Qt5::SerialPort
         Qt5::Sql
-        libclntsh.so
-        libocilib.so
-        libnnz12.so
+        ocilib
 )
 if(WIN32)
     set(QT_USE_QTMAIN TRUE)
